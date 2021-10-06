@@ -12,8 +12,18 @@ type Config struct {
     JsonData []byte
     TimeoutSec int
     Url string
-    UrlQuery *url.Values
+    UrlQuery url.Values
 }
 
 
 
+//////////////////////////////////////////////////////////////////////
+// Add a URL query parameter.
+//////////////////////////////////////////////////////////////////////
+func (c *Config) AddUrlQuery(key, value string) *Config {
+    if c.UrlQuery == nil {
+        c.UrlQuery = url.Values{}
+    }
+    c.UrlQuery.Add(key, value)
+    return c
+}
