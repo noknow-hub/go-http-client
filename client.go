@@ -6,6 +6,7 @@ package v1
 import (
     "io/ioutil"
     "net/http"
+    "strings"
     "time"
 )
 
@@ -31,7 +32,14 @@ func NewClient(url string) *Client {
 // HTTP GET request.
 //////////////////////////////////////////////////////////////////////
 func (c *Client) Get() (*Response, error) {
-    req, err := http.NewRequest(HTTP_METHOD_GET, c.Config.Url, nil)
+    var req *http.Request
+    var err error
+
+    if c.Config.UrlQuery != nil {
+        req, err = http.NewRequest(HTTP_METHOD_GET, c.Config.Url, strings.NewReader(c.Config.UrlQuery.Encode()))
+    } else {
+        req, err = http.NewRequest(HTTP_METHOD_GET, c.Config.Url, nil)
+    }
     if err != nil {
         return nil, err
     }
