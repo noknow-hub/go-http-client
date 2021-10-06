@@ -6,7 +6,6 @@ package v1
 import (
     "io/ioutil"
     "net/http"
-    "strings"
     "time"
 )
 
