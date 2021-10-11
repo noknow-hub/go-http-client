@@ -4,7 +4,9 @@
 package v1
 
 import (
+    "bytes"
     "io/ioutil"
+    "mime/multipart"
     "net/http"
     "strings"
     "time"
@@ -29,19 +31,43 @@ func NewClient(url string) *Client {
 
 
 //////////////////////////////////////////////////////////////////////
-// HTTP GET request.
+// HTTP request.
 //////////////////////////////////////////////////////////////////////
-func (c *Client) Get() (*Response, error) {
+func (c *Client) Do(httpMethod string) (*Response, error) {
     var req *http.Request
     var err error
 
-    if c.Config.UrlQuery != nil {
-        req, err = http.NewRequest(HTTP_METHOD_GET, c.Config.Url, strings.NewReader(c.Config.UrlQuery.Encode()))
+    // HTTP URL query
+    if c.Config.UrlQueryData != nil {
+        c.Config.Url = c.Config.Url + "?" + c.Config.UrlQueryData.Encode()
+    }
+
+    // HTTP message body
+    if c.Config.XWwwFormUrlencodedData != nil {
+        req, err = http.NewRequest(httpMethod, c.Config.Url, strings.NewReader(c.Config.XWwwFormUrlencodedData.Encode()))
+        req.Header.Set("Content-Type", CONTENT_TYPE_X_WWW_FORM_URLENCODED)
+    } else if len(c.Config.FormData) > 0 {
+        body, contentType, err := c.generateFormDataBody()
+        if err != nil {
+            return nil, err
+        }
+        req, err = http.NewRequest(httpMethod, c.Config.Url, body)
+        req.Header.Set("Content-Type", contentType)
+    } else if c.Config.JsonData != nil {
+        req, err = http.NewRequest(httpMethod, c.Config.Url, bytes.NewBuffer(c.Config.JsonData))
+        req.Header.Set("Content-Type", CONTENT_TYPE_JSON)
     } else {
-        req, err = http.NewRequest(HTTP_METHOD_GET, c.Config.Url, nil)
+        req, err = http.NewRequest(httpMethod, c.Config.Url, nil)
     }
     if err != nil {
         return nil, err
+    }
+
+    // HTTP header
+    if c.Config.Header != nil {
+        for key, value := range c.Config.Header {
+            req.Header.Set(key, value)
+        }
     }
 
     client := &http.Client{}
@@ -81,3 +107,43 @@ func (c *Client) Get() (*Response, error) {
     return response, nil
 }
 
+
+//////////////////////////////////////////////////////////////////////
+// HTTP GET request.
+//////////////////////////////////////////////////////////////////////
+func (c *Client) Get() (*Response, error) {
+    return c.Do(http.MethodGet)
+}
+
+
+//////////////////////////////////////////////////////////////////////
+// HTTP POST request.
+//////////////////////////////////////////////////////////////////////
+func (c *Client) Post() (*Response, error) {
+    return c.Do(http.MethodPost)
+}
+
+
+//////////////////////////////////////////////////////////////////////
+// Generate a body for "multipart/form-data".
+//////////////////////////////////////////////////////////////////////
+func (c *Client) generateFormDataBody() (*bytes.Buffer, string, error) {
+    body := new(bytes.Buffer)
+    writer := multipart.NewWriter(body)
+    contentType := writer.FormDataContentType()
+    for _, formData := range c.Config.FormData {
+        if formData.FileName != "" && formData.FileData != nil {
+            part, err := writer.CreateFormFile(formData.Name, formData.FileName)
+            if err != nil {
+                return nil, "", err
+            }
+            part.Write(formData.FileData)
+        } else {
+            writer.WriteField(formData.Name, formData.Value)
+        }
+    }
+    if err := writer.Close(); err != nil {
+        return nil, "", err
+    }
+    return body, contentType, nil
+}
